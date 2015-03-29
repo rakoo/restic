@@ -172,7 +172,7 @@ func TestChunker(t *testing.T) {
 	}
 
 	// setup nullbyte data source
-	buf = bytes.Repeat([]byte{0}, len(chunks2)*chunker.MinSize)
+	buf = bytes.Repeat([]byte{0}, len(chunks2)*int(chunker.MinSize))
 	ch = chunker.New(bytes.NewReader(buf), *testBufSize, sha256.New())
 
 	test_with_data(t, ch, chunks2)
@@ -210,7 +210,7 @@ func TestChunkerWithoutHash(t *testing.T) {
 	}
 
 	// setup nullbyte data source
-	buf = bytes.Repeat([]byte{0}, len(chunks2)*chunker.MinSize)
+	buf = bytes.Repeat([]byte{0}, len(chunks2)*int(chunker.MinSize))
 	ch = chunker.New(bytes.NewReader(buf), *testBufSize, sha256.New())
 
 	test_with_data(t, ch, chunks2)
@@ -227,13 +227,14 @@ func TestChunkerReuse(t *testing.T) {
 	}
 }
 
-func benchmarkChunker(b *testing.B, hash hash.Hash) {
+func benchmarkChunker(b *testing.B, bits uint, hash hash.Hash) {
 	var (
 		rd   io.ReadSeeker
 		size int
 	)
 
-	b.Logf("using bufsize %v", *testBufSize)
+	chunker.UpdateSplitmask(bits)
+	b.Logf("using bufsize %v, split %d bits, min %d, max %d", *testBufSize, bits, chunker.MinSize, chunker.MaxSize)
 
 	if *benchmarkFile != "" {
 		b.Logf("using file %q for benchmark", *benchmarkFile)
@@ -284,13 +285,13 @@ func benchmarkChunker(b *testing.B, hash hash.Hash) {
 }
 
 func BenchmarkChunkerWithSHA256(b *testing.B) {
-	benchmarkChunker(b, sha256.New())
+	benchmarkChunker(b, 20, sha256.New())
 }
 
 func BenchmarkChunkerWithMD5(b *testing.B) {
-	benchmarkChunker(b, md5.New())
+	benchmarkChunker(b, 20, md5.New())
 }
 
 func BenchmarkChunker(b *testing.B) {
-	benchmarkChunker(b, nil)
+	benchmarkChunker(b, 20, nil)
 }

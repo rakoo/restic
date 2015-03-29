@@ -9,23 +9,32 @@ import (
 const (
 	KiB = 1024
 	MiB = 1024 * KiB
+	GiB = 1024 * MiB
 
 	// Polynomial is a randomly generated irreducible polynomial of degree 53
 	// in Z_2[X]. All rabin fingerprints are calculated with this polynomial.
 	Polynomial = 0x3DA3358B4DC173
+)
 
+var (
 	// WindowSize is the size of the sliding window.
 	WindowSize = 64
 
-	// aim to create chunks of 20 bits or about 1MiB on average.
-	AverageBits = 20
-
 	// Chunks should be in the range of 512KiB to 8MiB.
-	MinSize = 512 * KiB
-	MaxSize = 8 * MiB
+	MinSize = uint(512 * KiB)
+	MaxSize = uint(8 * MiB)
 
-	splitmask = (1 << AverageBits) - 1
+	splitmask uint64
 )
+
+func init() {
+	// aim to create chunks of 20 bits or about 1MiB on average.
+	UpdateSplitmask(20)
+}
+
+func UpdateSplitmask(bits uint) {
+	splitmask = uint64((1 << bits) - 1)
+}
 
 var (
 	pol_shift = deg(Polynomial) - 8
@@ -52,7 +61,7 @@ type Chunker struct {
 	rd     io.Reader
 	closed bool
 
-	window [WindowSize]byte
+	window []byte
 	wpos   int
 
 	buf  []byte
@@ -75,8 +84,9 @@ func New(rd io.Reader, bufsize int, hash hash.Hash) *Chunker {
 	once.Do(fill_tables)
 
 	c := &Chunker{
-		buf: make([]byte, bufsize),
-		h:   hash,
+		buf:    make([]byte, bufsize),
+		h:      hash,
+		window: make([]byte, WindowSize),
 	}
 	c.Reset(rd)
 
@@ -104,7 +114,7 @@ func (c *Chunker) Reset(rd io.Reader) {
 	}
 
 	// do not start a new chunk unless at least MinSize bytes have been read
-	c.pre = MinSize - WindowSize
+	c.pre = MinSize - uint(WindowSize)
 }
 
 // Calculate out_table and mod_table for optimization. Must be called only once.
@@ -170,7 +180,7 @@ func (c *Chunker) Next() (*Chunk, error) {
 					return &Chunk{
 						Start:  c.start,
 						Length: c.count,
-						Cut:    c.digest,
+						Cut:    1,
 						Digest: c.hashDigest(),
 					}, nil
 				}
@@ -250,7 +260,7 @@ func (c *Chunker) Next() (*Chunk, error) {
 				c.Reset(c.rd)
 				c.pos = pos
 				c.start = pos
-				c.pre = MinSize - WindowSize
+				c.pre = MinSize - uint(WindowSize)
 
 				return chunk, nil
 			}
